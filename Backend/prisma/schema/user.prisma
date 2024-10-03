@@ -1,0 +1,13 @@
+enum authProvider{
+    Email
+    Google
+}
+
+model user {
+    uid  Int @id @default(autoincrement())
+    username String?
+    password String?
+    salt String?
+    provider authProvider @default(Email)
+    providerToken String?
+}
