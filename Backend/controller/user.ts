@@ -3,7 +3,9 @@ import * as type from "./interface/auth";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { ConfigSingleton } from "../utils/config";
 
+const config = ConfigSingleton.getInstance();
 const prisma = new PrismaClient();
 
 export async function login(req: Request, res: Response) {
@@ -51,14 +53,22 @@ export async function providerLogin(req: Request, res: Response) {
 
 export async function register(req: Request, res: Response) {
   const data: type.register = req.body;
+
+  var email_domain = data.email.split("@")[1];
+  var allowed_domains:Array<String> = config.configRegister? config.getConfig().allowed_email : [];
+  if(allowed_domains && !allowed_domains.some((domain)=>domain === email_domain)){
+    res.status(400).json({ error: "Email domain not allowed" });
+    return;
+  }
+
   var is_duplicate = await prisma.user.count({
     where: { username: data.email },
   });
-
   if (is_duplicate !== 0) {
     res.status(400).json({ error: "User already exists" });
     return;
   }
+
 
   var salt = bcrypt.genSaltSync(10);
   var hash = bcrypt.hashSync(data.password, salt);
