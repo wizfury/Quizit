@@ -1,0 +1,4 @@
+model config{
+    configName String @id
+    configValue Json
+}
