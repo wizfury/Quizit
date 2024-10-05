@@ -69,7 +69,6 @@ export async function register(req: Request, res: Response) {
     return;
   }
 
-
   var salt = bcrypt.genSaltSync(10);
   var hash = bcrypt.hashSync(data.password, salt);
   var user = await prisma.user.create({
@@ -83,7 +82,7 @@ export async function register(req: Request, res: Response) {
     },
   });
 
-  res.json(user.uid);
+  res.json({uid: user.uid});
 }
 
 export async function validate(req: Request, res: Response) {
