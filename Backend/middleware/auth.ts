@@ -7,11 +7,12 @@ export async function protect(req: Request ,res: Response, next: NextFunction){
     if(token){
         try{
             var val:any = await jwt.verify(token, process.env.JWT_SECRET!)
-            req.body.user.uid = val.uid
+            req.body.user = val.uid
             next()
         }
         catch(err){
-            res.clearCookie('token')
+            console.log(err)
+            // res.clearCookie('token')
             res.status(401).json({error: "Invalid Token"})
         }
     }else{
