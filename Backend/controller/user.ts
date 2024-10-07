@@ -39,6 +39,7 @@ export async function login(req: Request, res: Response) {
         email: user.username,
         role: user.role,
         provider: user.provider,
+        rollno: user.rollno,
       },
     });
     return;
@@ -55,8 +56,13 @@ export async function register(req: Request, res: Response) {
   const data: type.register = req.body;
 
   var email_domain = data.email.split("@")[1];
-  var allowed_domains:Array<String> = config.configRegister? config.getConfig().allowed_email : [];
-  if(allowed_domains && !allowed_domains.some((domain)=>domain === email_domain)){
+  var allowed_domains: Array<String> = config.configRegister
+    ? config.getConfig().allowed_email
+    : [];
+  if (
+    allowed_domains &&
+    !allowed_domains.some((domain) => domain === email_domain)
+  ) {
     res.status(400).json({ error: "Email domain not allowed" });
     return;
   }
@@ -82,9 +88,25 @@ export async function register(req: Request, res: Response) {
     },
   });
 
-  res.json({uid: user.uid});
+  res.json({ uid: user.uid });
 }
 
 export async function validate(req: Request, res: Response) {
-  res.sendStatus(200);
+  if (!req.body.user) {
+    res.status(401);
+  }
+  var user = await prisma.user.findUnique({ where: { uid: req.body.user } });
+  if (user) {
+    res.json({
+      user: {
+        name: user.name,
+        email: user.username,
+        role: user.role,
+        provider: user.provider,
+        rollno: user.rollno,
+      },
+    });
+    return 
+  }
+  res.status(401).json({ error: "Invalid User" });
 }
