@@ -26,11 +26,9 @@ class EvaluationRequest(BaseModel):
 
 
 def preprocess_text(text):
-    """removing punctuation and converting to lowercase."""
     return re.sub(r'[^\w\s]', '', text.lower())
 
 def calculate_length_penalty(student_answer, teacher_answer):
-    """Calculate a lenient penalty based on the length of the student's answer compared to the teacher's."""
     student_len = len(student_answer.split())
     teacher_len = len(teacher_answer.split())
     length_ratio = student_len / teacher_len
