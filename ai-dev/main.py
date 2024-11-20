@@ -4,21 +4,29 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from rouge_score import rouge_scorer
 import re
+from openai import OpenAI
+from dotenv import load_dotenv
+import os
 
-# Initialize FastAPI app
+load_dotenv()
+
 app = FastAPI()
 
-# Load the SentenceTransformer model globally
 model = SentenceTransformer('paraphrase-mpnet-base-v2')
 
-# Request schema
+client = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("OPENROUTER_API_KEY"),  
+)
+
+
 class EvaluationRequest(BaseModel):
     student_answer: str
     teacher_answer: str
 
-# Utility Functions
+
 def preprocess_text(text):
-    """Preprocess the input text by removing punctuation and converting to lowercase."""
+    """removing punctuation and converting to lowercase."""
     return re.sub(r'[^\w\s]', '', text.lower())
 
 def calculate_length_penalty(student_answer, teacher_answer):
@@ -27,67 +35,87 @@ def calculate_length_penalty(student_answer, teacher_answer):
     teacher_len = len(teacher_answer.split())
     length_ratio = student_len / teacher_len
 
-    # Lenient penalty adjustments
+    
     if length_ratio < 0.7:
-        penalty = 0.8  # Lower penalty for shorter answers
+        penalty = 0.8  
     elif 0.7 <= length_ratio < 1:
-        penalty = 1 - (length_ratio - 0.7) / 0.3  # Gradual penalty decrease
+        penalty = 1 - (length_ratio - 0.7) / 0.3  
     else:
-        penalty = 0  # No penalty for longer answers
+        penalty = 0  
 
     return penalty
 
+def generate_analysis(student_answer, teacher_answer):
+    prompt = f"""
+    Please provide a brief and thoughtful analysis of the student's answer in comparison to the teacher's answer.
+    Highlight key differences, areas of improvement, and any strengths in the student's response.
+    Keep the analysis under 50 words and be gentle in your tone.
+    Do not involve any comparison based on punctuation.
+    
+    Student Answer: {student_answer}
+    Teacher Answer: {teacher_answer}
+"""
+
+    
+  
+    completion = client.chat.completions.create(
+        model="openai/gpt-4o-mini-2024-07-18",
+        messages=[{
+            "role": "user",
+            "content": prompt
+        }]
+    )
+
+    
+    analysis = completion.choices[0].message.content
+    return analysis
+
 def evaluate_student_answer(student_answer, teacher_answer):
-    """Evaluate the student's answer against the teacher's answer."""
-    # Preprocess the text
+   
+    
     teacher_answer = preprocess_text(teacher_answer)
     student_answer = preprocess_text(student_answer)
 
-    # Generate embeddings
+   
     teacher_embedding = model.encode(teacher_answer).tolist()
     student_embedding = model.encode(student_answer).tolist()
 
-    # Calculate cosine similarity
+   
     similarity_score = cosine_similarity([student_embedding], [teacher_embedding])[0][0]
 
-    # Calculate ROUGE scores
+    
     scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=True)
     rouge_scores = scorer.score(student_answer, teacher_answer)
 
-    # Extract ROUGE metrics
+   
     rouge1_f1 = rouge_scores['rouge1'].fmeasure
     rougeL_f1 = rouge_scores['rougeL'].fmeasure
 
-    # Calculate lenient length penalty
+  
     length_penalty = calculate_length_penalty(student_answer, teacher_answer)
 
-    # Weights for final score calculation (adjusted for leniency)
+    analysis = generate_analysis(student_answer, teacher_answer)
+
     similarity_weight = 0.5
     rouge_weight = 0.3
     length_penalty_weight = 0.2
 
-    # Final score calculation
     final_score = (similarity_score * similarity_weight) + \
                   ((rouge1_f1 + rougeL_f1) / 2 * rouge_weight) * \
                   (1 - length_penalty * length_penalty_weight)
 
     return {
-        # "similarity_score": similarity_score,
-        # "rouge_scores": {
-        #     "rouge1": rouge_scores['rouge1']._asdict(),
-        #     "rougeL": rouge_scores['rougeL']._asdict(),
-        # },
-        # "length_penalty": length_penalty,
-        "final_score": f"{round(final_score, 2)*100}%"  # Round to 2 decimal places
+        "final_score": f"{round(final_score, 2)*100}%", 
+        "analysis": analysis  
     }
 
-# API Endpoints
+
 @app.post("/evaluate")
 async def evaluate(request: EvaluationRequest):
-    """Evaluate a student's answer."""
+    
     if not request.student_answer or not request.teacher_answer:
         raise HTTPException(status_code=400, detail="Both 'student_answer' and 'teacher_answer' are required.")
 
-    # Evaluate the answer
+   
     results = evaluate_student_answer(request.student_answer, request.teacher_answer)
     return results
